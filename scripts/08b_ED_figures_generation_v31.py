@@ -5,7 +5,7 @@
 V31 EXTENDED DATA FIGURE GENERATION SCRIPT (ED Figs 1–10)
 "Thermodynamic gamblers: why warming favours microbes that accelerate it"
 
-Version v31 (Nature submission — revised):
+Version v31 (Nature submission — triple-audit corrections):
 - Generates Extended Data Figures 1–10 for reproducibility archiving
 - Loads data from v31 xlsx files
 - Visual style consistent with main manuscript figures
@@ -17,7 +17,6 @@ Date: March 2026
 
 import pandas as pd
 import numpy as np
-import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -61,36 +60,6 @@ h = 6.62607e-34
 PREFACTOR = kB / h
 ER_TMAX_THRESHOLD_R = 36.5
 LOW_EH_THRESHOLD = 20  # kJ/mol
-
-# O2 metabolism categories
-O2_SUBSCRIPT = '$_2$'
-O2_CAT_CYANO = f'Cyanobacteria (O{O2_SUBSCRIPT} producers)'
-O2_CAT_AEROBIC_HET = f'Aerobic heterotroph (O{O2_SUBSCRIPT} consumers)'
-O2_CAT_ANAEROBE = 'Strict anaerobe'
-O2_CAT_FACULTATIVE = 'Facultative anaerobe'
-O2_CAT_CHEMOLITHO = 'Aerobic chemolithotroph'
-O2_CAT_ANOXYGENIC = 'Anoxygenic phototroph'
-
-def classify_o2_metabolism(row):
-    """Classify strain into oxygen metabolism category."""
-    guild = str(row['Guild_harmonized']).lower()
-    phylum = str(row['Phylum_harmonized']).lower()
-    domain = str(row['Domain'])
-    if 'cyanobacteria' in phylum:
-        return O2_CAT_CYANO
-    if 'anoxygenic' in guild:
-        return O2_CAT_ANOXYGENIC
-    if any(x in guild for x in ['hydrogen-oxid', 'iron-oxid', 'sulfur-oxid',
-                                 'ammonia-oxid', 'methane-oxid', 'methanotroph']):
-        return O2_CAT_CHEMOLITHO
-    if any(x in guild for x in ['ferment', 'methanogen', 'sulfate-reduc', 'acetogen',
-                                 'iron-reduc', 'sulfur-reduc']):
-        return O2_CAT_ANAEROBE
-    if any(x in guild for x in ['facultativ', 'denitrif']):
-        return O2_CAT_FACULTATIVE
-    if domain == 'Bacteria' and any(x in guild for x in ['aerobic', 'chemoorgano']):
-        return O2_CAT_AEROBIC_HET
-    return 'Other'
 
 DATA_DIR = '/home/claude/'
 OUTPUT_DIR = '/home/claude/'
@@ -184,8 +153,10 @@ def load_data():
         lambda r: -r['Eh'] * 1000 / (R_J * (r['Topt'] + 273.15)) *
         (1 - (r['Topt'] + 273.15) / (r['Tmax'] + 273.15))
         if r['Tmax'] > r['Topt'] else np.nan, axis=1)
+    # Fallback: recréer Population (GMM) par seuil si absente
     if 'Population' not in df.columns:
         df['Population'] = np.where(df['Eh'] < LOW_EH_THRESHOLD, 'Low_Eh', 'High_Eh')
+    # MetGroup mapping for ED Fig 9 compatibility
     metgroup_map = {
         'Heterotroph': 'Heterotrophs',
         'Oxygenic_phototroph': 'Oxy. phototrophs',
@@ -195,8 +166,8 @@ def load_data():
         'Other': 'Other',
     }
     df['MetGroup'] = df['Metabolic_group'].map(metgroup_map).fillna('Other')
+    # Er residual (rounded coefficients, consistent with MS equation and Fig 3D)
     df['Er_residual'] = df['Er'] - (0.193 * df['Tmax_K'] + 37.0)
-    df['O2_cat'] = df.apply(classify_o2_metabolism, axis=1)
     return df
 
 
@@ -902,7 +873,7 @@ def generate_ed_fig9(df, output_dir=OUTPUT_DIR):
 def generate_ed_fig10(df, output_dir=OUTPUT_DIR):
     """
     Extended Data Figure 10. Oxygen metabolism and the activation enthalpy landscape.
-    (Formerly Figure 3, moved to Supplementary Information in v26.)
+    (Formerly Figure 3, moved to Extended Data in v26.)
     """
     print("Generating Extended Data Figure 10: Oxygen metabolism...")
     
@@ -1052,7 +1023,7 @@ def main():
     plot_ed_fig7(df, df_ctm, output_dir)
     plot_ed_fig8(df, df_mcmc, output_dir)
     # ED Fig 9 (multivariate)
-    generate_ed_fig9(df)
+    generate_ed_fig9(df, output_dir)
     # ED Fig 10 (O2 metabolism)
     generate_ed_fig10(df, output_dir)
 
